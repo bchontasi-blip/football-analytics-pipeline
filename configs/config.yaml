@@ -1,0 +1,65 @@
+pipeline:
+  name: football-analytics-pipeline
+  version: 1.0.0  # pipeline version, not library version
+  engine: pandas  # pandas sufficient for ~200MB dataset, switch to spark at GB+ scale
+
+paths:
+  # centralised paths - change once here if moving to cloud storage
+  data_day1: data/day1      # initial Kaggle CSV snapshot
+  data_day2: data/day2      # simulated new data arrival for incremental load
+  bronze: data/bronze       # raw parquet files, minimal transformation
+  silver: data/silver       # cleaned data structured as star schema
+  gold: data/gold           # aggregated business-ready tables
+  logs: logs                # structured logs per pipeline run
+
+ingestion:
+  source_tables:
+    - players
+    - games
+    - appearances
+    - clubs
+    - competitions
+    - player_valuations
+  file_format: csv
+  output_format: parquet    # parquet for efficient columnar storage
+
+airflow:
+  schedule_interval: "@hourly"   # configurable frequency as per requirements
+  retries: 3                     # retry failed tasks before alerting
+  retry_delay_minutes: 5
+
+data_quality:
+  null_check_columns:
+    appearances:
+      - player_id
+      - game_id
+    games:
+      - game_id
+  valid_ranges:
+    appearances:
+      minutes_played:
+        min: 0    # can't play negative minutes
+      goals:
+        min: 0    # can't score negative goals
+
+scd:
+  type: 2                          # keep full history, don't overwrite
+  tables:
+    - players
+    - player_valuations
+  effective_date_col: effective_date
+  end_date_col: end_date
+  is_current_col: is_current
+
+transformations:
+  position_mapping:
+    # standardise raw position labels to English taxonomy
+    Attack: Forward
+    Mittelfeld: Midfielder
+    Abwehr: Defender
+    Tor: Goalkeeper
+    Sturm: Forward
+    midfield: Midfielder
+    attack: Forward
+    defence: Defender
+    goalkeeper: Goalkeeper
