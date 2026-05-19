@@ -25,7 +25,7 @@ def clean_dataframe(df: pd.DataFrame, table_name: str) -> pd.DataFrame:
     df = df.drop_duplicates()
     
     # strip whitespace from all string columns
-    string_cols = df.select_dtypes(include="object").columns
+    string_cols = df.select_dtypes(include="str").columns
     df[string_cols] = df[string_cols].apply(lambda x: x.str.strip())
     
     # drop rows where ALL values are null
@@ -287,6 +287,16 @@ def run_silver(config: dict, dataframes: dict) -> dict:
     # build fact tables
     silver_tables["fact_appearances"] = build_fact_appearances(dataframes["appearances"])
     silver_tables["fact_games"] = build_fact_games(dataframes["games"])
+    
+    # clean player_valuations and pass through to Gold
+    # no complex transformation needed - just clean and cast types
+    df_valuations = clean_dataframe(dataframes["player_valuations"], "player_valuations")
+    df_valuations["player_id"] = df_valuations["player_id"].astype(str)
+    df_valuations["date"] = pd.to_datetime(df_valuations["date"], errors="coerce")
+    df_valuations["market_value_in_eur"] = pd.to_numeric(
+        df_valuations["market_value_in_eur"], errors="coerce"
+    )
+    silver_tables["player_valuations"] = df_valuations  # Gold needs this for valuation trend
     
     # save all silver tables as parquet
     for table_name, df in silver_tables.items():
