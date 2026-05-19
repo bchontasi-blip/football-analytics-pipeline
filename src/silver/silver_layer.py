@@ -165,3 +165,134 @@ def build_dim_date(df_games: pd.DataFrame) -> pd.DataFrame:
     
     logger.info(f"Built dim_date with {len(dim_date)} rows")
     return dim_date
+
+#fact tables:
+
+def build_fact_appearances(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build the appearances fact table from Bronze data.
+    Contains measurable events - goals, assists, minutes played per game per player.
+    
+    Args:
+        df: Raw appearances dataframe from Bronze
+        
+    Returns:
+        Clean fact_appearances dataframe
+    """
+    df = clean_dataframe(df, "appearances")
+    
+    fact_appearances = df[[
+        "appearance_id",
+        "game_id",
+        "player_id",
+        "player_club_id",
+        "competition_id",
+        "date",
+        "goals",
+        "assists",
+        "minutes_played",
+        "yellow_cards",
+        "red_cards",
+        "_ingested_at"
+    ]].copy()
+    
+    # cast types
+    fact_appearances["game_id"] = fact_appearances["game_id"].astype(str)
+    fact_appearances["player_id"] = fact_appearances["player_id"].astype(str)
+    fact_appearances["player_club_id"] = fact_appearances["player_club_id"].astype(str)
+    fact_appearances["competition_id"] = fact_appearances["competition_id"].astype(str)
+    fact_appearances["date"] = pd.to_datetime(fact_appearances["date"], errors="coerce")
+    
+    # ensure numeric columns are correct type
+    fact_appearances["goals"] = pd.to_numeric(fact_appearances["goals"], errors="coerce").fillna(0).astype(int)
+    fact_appearances["assists"] = pd.to_numeric(fact_appearances["assists"], errors="coerce").fillna(0).astype(int)
+    fact_appearances["minutes_played"] = pd.to_numeric(fact_appearances["minutes_played"], errors="coerce").fillna(0).astype(int)
+    fact_appearances["yellow_cards"] = pd.to_numeric(fact_appearances["yellow_cards"], errors="coerce").fillna(0).astype(int)
+    fact_appearances["red_cards"] = pd.to_numeric(fact_appearances["red_cards"], errors="coerce").fillna(0).astype(int)
+    
+    logger.info(f"Built fact_appearances with {len(fact_appearances)} rows")
+    return fact_appearances
+
+def build_fact_games(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build the games fact table from Bronze data.
+    Derives match outcome (win/loss/draw) from score data.
+    
+    Args:
+        df: Raw games dataframe from Bronze
+        
+    Returns:
+        Clean fact_games dataframe with derived match outcome
+    """
+    df = clean_dataframe(df, "games")
+    
+    fact_games = df[[
+        "game_id",
+        "competition_id",
+        "season",
+        "date",
+        "home_club_id",
+        "away_club_id",
+        "home_club_goals",
+        "away_club_goals",
+        "_ingested_at"
+    ]].copy()
+    
+    # cast types
+    fact_games["game_id"] = fact_games["game_id"].astype(str)
+    fact_games["competition_id"] = fact_games["competition_id"].astype(str)
+    fact_games["home_club_id"] = fact_games["home_club_id"].astype(str)
+    fact_games["away_club_id"] = fact_games["away_club_id"].astype(str)
+    fact_games["date"] = pd.to_datetime(fact_games["date"], errors="coerce")
+    fact_games["home_club_goals"] = pd.to_numeric(fact_games["home_club_goals"], errors="coerce").fillna(0).astype(int)
+    fact_games["away_club_goals"] = pd.to_numeric(fact_games["away_club_goals"], errors="coerce").fillna(0).astype(int)
+    
+    # derive match outcome from score - required by assessment section 7
+    fact_games["match_outcome"] = fact_games.apply(
+        lambda row: "home_win" if row["home_club_goals"] > row["away_club_goals"]
+        else "away_win" if row["home_club_goals"] < row["away_club_goals"]
+        else "draw",
+        axis=1  # apply row by row
+    )
+    
+    # derive season year from date - required by assessment section 7
+    fact_games["season_year"] = fact_games["date"].dt.year
+    
+    logger.info(f"Built fact_games with {len(fact_games)} rows")
+    return fact_games
+
+def run_silver(config: dict, dataframes: dict) -> dict:
+    """
+    Run all Silver transformations.
+    Builds all dimension and fact tables from Bronze dataframes.
+    
+    Args:
+        config: Pipeline configuration dictionary
+        dataframes: Dictionary of {table_name: dataframe} from Bronze/ingestion
+        
+    Returns:
+        Dictionary of {table_name: dataframe} for all Silver tables
+    """
+    silver_path = config["paths"]["silver"]
+    Path(silver_path).mkdir(parents=True, exist_ok=True)
+    
+    silver_tables = {}
+    
+    # build dimension tables
+    silver_tables["dim_players"] = build_dim_players(dataframes["players"], config)
+    silver_tables["dim_clubs"] = build_dim_clubs(dataframes["clubs"])
+    silver_tables["dim_competitions"] = build_dim_competitions(dataframes["competitions"])
+    silver_tables["dim_date"] = build_dim_date(dataframes["games"])
+    
+    # build fact tables
+    silver_tables["fact_appearances"] = build_fact_appearances(dataframes["appearances"])
+    silver_tables["fact_games"] = build_fact_games(dataframes["games"])
+    
+    # save all silver tables as parquet
+    for table_name, df in silver_tables.items():
+        output_file = Path(silver_path) / f"{table_name}.parquet"
+        df.to_parquet(output_file, index=False)
+        logger.info(f"Saved {table_name} to {output_file}")
+    
+    logger.info(f"Silver layer complete. {len(silver_tables)} tables saved.")
+    return silver_tables
