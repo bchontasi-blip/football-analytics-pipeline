@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+
+  # ---- AIRFLOW DATABASE ----
+  # Airflow needs a database to store DAG runs, task states, logs etc.
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # persist database between restarts
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+
+  # ---- AIRFLOW INIT ----
+  # runs once to initialise the database and create admin user
+  airflow-init:
+    image: apache/airflow:2.8.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'  # don't load example DAGs
+    volumes:
+      - ./dags:/opt/airflow/dags          # mount our DAGs
+      - ./src:/opt/airflow/src            # mount our source code
+      - ./configs:/opt/airflow/configs    # mount config
+      - ./data:/opt/airflow/data          # mount data folder
+      - ./logs:/opt/airflow/logs          # mount logs
+    command: >
+      bash -c "airflow db init &&
+               airflow users create
+               --username admin
+               --password admin
+               --firstname Admin
+               --lastname User
+               --role Admin
+               --email admin@example.com"
+
+  # ---- AIRFLOW WEBSERVER ----
+  # UI available at http://localhost:8080
+  airflow-webserver:
+    image: apache/airflow:2.8.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      PYTHONPATH: /opt/airflow  # so our imports work
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./configs:/opt/airflow/configs
+      - ./data:/opt/airflow/data
+      - ./logs:/opt/airflow/logs
+    ports:
+      - "8080:8080"             # expose UI at localhost:8080
+    command: webserver
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      retries: 5
+
+  # ---- AIRFLOW SCHEDULER ----
+  # triggers and monitors DAG runs
+  airflow-scheduler:
+    image: apache/airflow:2.8.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      PYTHONPATH: /opt/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./configs:/opt/airflow/configs
+      - ./data:/opt/airflow/data
+      - ./logs:/opt/airflow/logs
+    command: scheduler
+
+  # ---- PIPELINE CONTAINER ----
+  # executes the ETL pipeline end-to-end
+  pipeline:
+    build: .                    # build from our Dockerfile
+    volumes:
+      - ./data:/app/data        # mount data so CSVs are accessible
+      - ./configs:/app/configs  # mount config
+      - ./logs:/app/logs        # mount logs so we can see them locally
+    environment:
+      PYTHONPATH: /app
+    depends_on:
+      - airflow-webserver
+
+volumes:
+  postgres_data:  # named volume for postgres data persistence
