@@ -53,13 +53,9 @@ scd:
 
 transformations:
   position_mapping:
-    # standardise raw position labels to English taxonomy
+    # map raw position labels to standardised taxonomy
     Attack: Forward
-    Mittelfeld: Midfielder
-    Abwehr: Defender
-    Tor: Goalkeeper
-    Sturm: Forward
-    midfield: Midfielder
-    attack: Forward
-    defence: Defender
-    goalkeeper: Goalkeeper
+    Midfield: Midfielder
+    Defender: Defender
+    Goalkeeper: Goalkeeper
+    Missing: Unknown
