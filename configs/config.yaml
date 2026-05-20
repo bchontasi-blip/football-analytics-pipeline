@@ -59,3 +59,25 @@ transformations:
     Defender: Defender
     Goalkeeper: Goalkeeper
     Missing: Unknown
+  country_mapping:
+    # map country names to ISO 3166-1 alpha-2 codes
+    France: FR
+    Brazil: BR
+    Spain: ES
+    England: GB-ENG
+    Italy: IT
+    Germany: DE
+    Argentina: AR
+    Netherlands: NL
+    Portugal: PT
+    Turkey: TR
+    Ukraine: UA
+    Greece: GR
+    Russia: RU
+    UdSSR: SU
+    Belgium: BE
+    Japan: JP
+    Scotland: GB-SCT
+    Colombia: CO
+    Denmark: DK
+    United States: US

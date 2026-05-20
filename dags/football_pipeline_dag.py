@@ -32,6 +32,10 @@ default_args = {
 
 # ---- DAG DEFINITION ----
 # the DAG object is the container for all tasks
+# Idempotent execution: all tasks overwrite their output parquet files on each run.
+# Re-running the DAG will not cause duplicate data — Bronze, Silver and Gold
+# parquet files are fully replaced, not appended to.
+
 dag = DAG(
     dag_id="football_analytics_pipeline",  # unique name in Airflow UI
     default_args=default_args,

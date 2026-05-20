@@ -20,7 +20,7 @@ def check_nulls(df: pd.DataFrame, table_name: str, columns: list) -> dict:
         
         # count how many nulls are in this column
         null_count = df[col].isnull().sum()
-        passed = null_count == 0  # check passes only if zero nulls
+        passed = bool(null_count == 0)  # bool() ensures True/False not numpy bool
         
         # store result for the DQ report
         results[col] = {
@@ -60,7 +60,7 @@ def check_valid_ranges(df: pd.DataFrame, table_name: str, range_config: dict) ->
             failed_rows = failed_rows | (df[col] > rules["max"])
         
         failed_count = failed_rows.sum()
-        passed = failed_count == 0
+        passed = bool(failed_count == 0)  # bool() ensures True/False not numpy bool
         
         results[col] = {
             "passed": passed,
@@ -91,7 +91,7 @@ def check_referential_integrity(df_child: pd.DataFrame, df_parent: pd.DataFrame,
     # orphaned keys = keys in child that don't exist in parent
     # e.g. appearance references a player_id that doesn't exist in players
     orphaned_keys = child_keys - parent_keys
-    passed = len(orphaned_keys) == 0
+    passed = bool(len(orphaned_keys) == 0)  # bool() ensures True/False not numpy bool
     
     result = {
         "passed": passed,
@@ -114,7 +114,7 @@ def check_duplicates(df: pd.DataFrame, table_name: str, key_columns: list) -> di
     """
     # duplicated() returns True for each row that is a duplicate
     duplicate_count = df.duplicated(subset=key_columns).sum()
-    passed = duplicate_count == 0
+    passed = bool(duplicate_count == 0)  # bool() ensures True/False not numpy bool
     
     result = {
         "passed": passed,
@@ -137,18 +137,32 @@ def generate_dq_report(results: dict, log_dir: str = "logs") -> str:
     """
     Path(log_dir).mkdir(parents=True, exist_ok=True)
     
+    # count total checks and passed checks
+    total_checks = 0
+    passed_checks = 0
+    
+    for table_results in results.values():
+        if isinstance(table_results, dict):
+            # check if it's a single check result (has 'passed' key directly)
+            if "passed" in table_results:
+                total_checks += 1
+                if table_results["passed"] == True:
+                    passed_checks += 1
+            else:
+                # it's a dict of column checks
+                for col_result in table_results.values():
+                    if isinstance(col_result, dict) and "passed" in col_result:
+                        total_checks += 1
+                        if col_result["passed"] == True:
+                            passed_checks += 1
+    
     report = {
-        "run_date": datetime.now().isoformat(),  # when did this pipeline run
-        "results": results,                       # all check results
+        "run_date": datetime.now().isoformat(),
+        "results": results,
         "summary": {
-            "total_checks": sum(
-                len(v) for v in results.values() if isinstance(v, dict)
-            ),
-            "passed": sum(
-                1 for table in results.values()
-                for check in (table.values() if isinstance(table, dict) else [])
-                if isinstance(check, dict) and check.get("passed", False)
-            )
+            "total_checks": total_checks,
+            "passed": passed_checks,
+            "failed": total_checks - passed_checks  # how many checks failed
         }
     }
     

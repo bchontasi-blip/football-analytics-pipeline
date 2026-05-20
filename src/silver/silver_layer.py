@@ -54,6 +54,10 @@ def build_dim_players(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     # normalise position labels using mapping from config
     position_mapping = config["transformations"]["position_mapping"]
     df["position"] = df["position"].map(position_mapping).fillna("Unknown")
+    # standardise country names to ISO 3166-1 alpha-2 codes - required by assessment section 7
+    country_mapping = config["transformations"]["country_mapping"]
+    df["country_of_birth"] = df["country_of_birth"].map(country_mapping).fillna(df["country_of_birth"])
+    df["country_of_citizenship"] = df["country_of_citizenship"].map(country_mapping).fillna(df["country_of_citizenship"])
     
     # select only columns we need for the dimension table
     dim_players = df[[
