@@ -96,6 +96,21 @@ Four checks run on every pipeline execution, with results written to a JSON repo
 
 In production I'd add a quarantine layer to isolate these records for investigation rather than just logging them.
 
+The DQ report is generated as a JSON file in `logs/` on every pipeline run. Example output:
+
+```json
+{
+  "run_date": "2026-05-20T23:28:38",
+  "summary": {
+    "total_checks": 8,
+    "passed": 7,
+    "failed": 1
+  }
+}
+```
+
+The one failing check is a known data inconsistency in the Transfermarkt source — `player_id 380365` exists in appearances but not in players.
+
 ---
 
 ## Incremental Load & SCD Type 2
