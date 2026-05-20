@@ -64,7 +64,7 @@ Reads the 6 CSVs from `data/day1/`, adds two metadata columns (`_ingested_at` an
 Builds the Star Schema:
 
 **Dimension tables:**
-- `dim_players` — player profiles with normalised positions (Attack → Forward, Midfield → Midfielder, etc.)
+- `dim_players` — player profiles with normalised positions (Attack → Forward, Midfield → Midfielder, etc.) and country names standardised to ISO 3166-1 alpha-2 codes (France → FR, England → GB-ENG, etc.)
 - `dim_clubs` — club master data
 - `dim_competitions` — competition master data
 - `dim_date` — generated from match dates, not from a source CSV. Includes year, month, quarter, day of week, is_weekend, and season (e.g. 2023/24)
@@ -266,6 +266,7 @@ Configured via `config.yaml`:
 - Retries: 3 (configurable)
 - Retry delay: 5 minutes (configurable)
 
+**Idempotent execution** — all tasks overwrite their output parquet files on each run. Re-running the DAG will not cause duplicate data — Bronze, Silver and Gold parquet files are fully replaced, not appended to.
 ---
 
 ## Future Improvements
