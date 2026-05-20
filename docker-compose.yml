@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
 
   # ---- AIRFLOW DATABASE ----
   # Airflow needs a database to store DAG runs, task states, logs etc.
   postgres:
-    image: postgres:13
+    image: postgres:13-alpine
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -20,40 +18,35 @@ services:
   # ---- AIRFLOW INIT ----
   # runs once to initialise the database and create admin user
   airflow-init:
-    image: apache/airflow:2.8.1
+    image: apache/airflow:2.8.1-python3.11  # python 3.11 required for pandas 3.0.3
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'  # don't load example DAGs
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'   # don't load example DAGs
+      PYTHONPATH: /opt/airflow                # so our src/ imports work
+      _PIP_ADDITIONAL_REQUIREMENTS: "loguru==0.7.3 pyyaml==6.0.3 pandas==3.0.3 pyarrow==24.0.0"
     volumes:
-      - ./dags:/opt/airflow/dags          # mount our DAGs
-      - ./src:/opt/airflow/src            # mount our source code
-      - ./configs:/opt/airflow/configs    # mount config
-      - ./data:/opt/airflow/data          # mount data folder
-      - ./logs:/opt/airflow/logs          # mount logs
-    command: >
-      bash -c "airflow db init &&
-               airflow users create
-               --username admin
-               --password admin
-               --firstname Admin
-               --lastname User
-               --role Admin
-               --email admin@example.com"
+      - ./dags:/opt/airflow/dags              # mount our DAGs
+      - ./src:/opt/airflow/src                # mount our source code
+      - ./configs:/opt/airflow/configs        # mount config
+      - ./data:/opt/airflow/data              # mount data folder
+      - ./logs:/opt/airflow/logs              # mount logs
+    command: bash -c "airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com"
 
   # ---- AIRFLOW WEBSERVER ----
   # UI available at http://localhost:8080
   airflow-webserver:
-    image: apache/airflow:2.8.1
+    image: apache/airflow:2.8.1-python3.11  # python 3.11 required for pandas 3.0.3
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      PYTHONPATH: /opt/airflow  # so our imports work
+      PYTHONPATH: /opt/airflow                # so our src/ imports work
+      _PIP_ADDITIONAL_REQUIREMENTS: "loguru==0.7.3 pyyaml==6.0.3 pandas==3.0.3 pyarrow==24.0.0"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
@@ -61,7 +54,7 @@ services:
       - ./data:/opt/airflow/data
       - ./logs:/opt/airflow/logs
     ports:
-      - "8080:8080"             # expose UI at localhost:8080
+      - "8080:8080"                           # expose UI at localhost:8080
     command: webserver
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
@@ -71,14 +64,15 @@ services:
   # ---- AIRFLOW SCHEDULER ----
   # triggers and monitors DAG runs
   airflow-scheduler:
-    image: apache/airflow:2.8.1
+    image: apache/airflow:2.8.1-python3.11  # python 3.11 required for pandas 3.0.3
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      PYTHONPATH: /opt/airflow
+      PYTHONPATH: /opt/airflow                # so our src/ imports work
+      _PIP_ADDITIONAL_REQUIREMENTS: "loguru==0.7.3 pyyaml==6.0.3 pandas==3.0.3 pyarrow==24.0.0"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
@@ -88,13 +82,13 @@ services:
     command: scheduler
 
   # ---- PIPELINE CONTAINER ----
-  # executes the ETL pipeline end-to-end
+  # executes the ETL pipeline end-to-end independently of Airflow
   pipeline:
-    build: .                    # build from our Dockerfile
+    build: .                                  # build from our Dockerfile
     volumes:
-      - ./data:/app/data        # mount data so CSVs are accessible
-      - ./configs:/app/configs  # mount config
-      - ./logs:/app/logs        # mount logs so we can see them locally
+      - ./data:/app/data                      # mount data so CSVs are accessible
+      - ./configs:/app/configs                # mount config
+      - ./logs:/app/logs                      # mount logs so we can see them locally
     environment:
       PYTHONPATH: /app
     depends_on:

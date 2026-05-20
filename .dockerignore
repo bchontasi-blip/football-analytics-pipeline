@@ -1,0 +1,14 @@
+# don't copy data files into Docker image - mounted as volumes instead
+data/day1/
+data/day2/
+data/bronze/
+data/silver/
+data/gold/
+
+# don't copy local environment
+venv/
+.git/
+__pycache__/
+*.pyc
+.pytest_cache/
+logs/
